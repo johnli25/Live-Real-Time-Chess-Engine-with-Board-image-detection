@@ -6,6 +6,9 @@ import stockfish
 import chess
 import chess.svg
 import chess.engine
+import os 
+from PIL import Image
+import pillow_heif
 
 engine_path = "./stockfish/stockfish-windows-x86-64-avx2.exe"
 
@@ -54,4 +57,18 @@ def returnNextBestMove(board_img_nparray):
 # main driver code:
 current_8x8_board = returnBoardConfigurationFromImage("test.png")
 print(returnNextBestMove(current_8x8_board))
-    
+
+heic_directory = "./chess-images-dataset-heic/"
+output_directory = './chess-images-dataset-jpg/'
+heic_files = os.listdir(heic_directory)
+for filename in heic_files:
+    print("directory + filename:", os.path.join(heic_directory, filename))
+    heif_file = pillow_heif.read_heif(os.path.join(heic_directory, filename))
+    image = Image.frombytes(
+        heif_file.mode,
+        heif_file.size,
+        heif_file.data,
+        "raw",
+    )
+    image.save(os.path.join(output_directory, filename.replace(".HEIC", ".jpg")), format="jpeg")
+
