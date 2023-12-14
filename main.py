@@ -9,6 +9,7 @@ import chess.engine
 import os 
 from PIL import Image
 import pillow_heif
+import helper
 
 engine_path = "./stockfish/stockfish-windows-x86-64-avx2.exe"
 np.set_printoptions(threshold=np.inf)
@@ -73,23 +74,33 @@ test_corners = find_chessboard_corners(cv2.imread("./online_walnut_chess.jpg"))
 print("online walnut chess test_corners", test_corners)
 cv2.drawChessboardCorners(cv2.imread("./online_walnut_chess.jpg"), (7,7), test_corners, True)
 
+def random_color():
+    print("random color", np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+    return (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+
 def canny_edge_detection(img):
     # convert img to grayscale
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(img_gray, 100, 200, apertureSize=5) # apertureSize is the size of Sobel kernel (3,5,7) used for find image gradients, 100 = min threshold for hysterisis, 200 = max threshold for hysterisis procedure
+    edges = cv2.Canny(img_gray, 200, 400, apertureSize=5) # apertureSize is the size of Sobel kernel (3,5,7) used for find image gradients, 100 = min threshold for hysterisis, 200 = max threshold for hysterisis procedure
 
     # find contours: contours returns a list of contours, hierarchy describes the child-parent relationships between contours (e.g. if one contour is inside another contour)
     contours, hierarchy = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) 
-
+    
     # sort countours by descending area: internally, it temporarily convert array of points to enclosed area and determine closed area using cv2.contourArea
     contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
+    # for i, contour in enumerate(contours):
+    #     cv2.drawContours(img, contour, -1, random_color(), 2) # arguments are: image, contours, contourIdx (-1 means draw all contours), color, thickness
+    # plt.imshow(img)
+    # plt.suptitle("canny edge detection + draw all contours")
+    # plt.show()
+
     chessboard_contour = None
 
     for contour in contours:
         perimeter = cv2.arcLength(contour, True) # extract perimeter of contour
 
         # approximate the contour to a polygon by simplifying contour shape to another shape with fewer vertices
-        approx = cv2.approxPolyDP(contour, 0.02 * perimeter, True) # approx is a list of points representing the polygon
+        approx = cv2.approxPolyDP(contour, 0.015 * perimeter, True) # approx is a list of points representing the polygon
         print("len approx", len(approx))
         if len(approx) == 4:
             chessboard_contour = approx
@@ -109,21 +120,61 @@ def canny_edge_detection(img):
         plt.show()
 
     else:
-        print("chessboard not found")
+        print("chessboard contours not found")
 
+def to_txt_file(name, array):
+    with open("corners.txt", "w") as f:
+        f.write(name + "\n")
+        f.write(str(array))
 
-output_directory = [jpg_directory + "IMG_5262.jpg", "./online_walnut_chess.jpg"]
+output_directory = [jpg_directory + "IMG_5090.jpg"] # , jpg_directory + "IMG_5091.jpg", jpg_directory + "IMG_5092.jpg"]
+# output_directory = os.listdir(jpg_directory) 
+output_directory = ['./manually_cropped_chessboard.png']
 for img_path in output_directory:
+    # img_path = jpg_directory + img_path
     img = cv2.imread(img_path)
 
     # downscale image:
-    img = cv2.resize(img, (0,0), fx=0.5 ** 2, fy=0.5 ** 2)
+    img = cv2.resize(img, (0,0), fx=0.5 ** 1, fy=0.5 ** 1)
+
+    # Shi Tomasi Corner Detection (pretty good)
+    corners2 = cv2.goodFeaturesToTrack(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 100, 0.1, 10) # args are: image, maxCorners, qualityLevel, minDistance
+    corners2_array = np.array(corners2).astype(np.int32)
+    for corner in corners2_array:
+        x, y = corner.ravel()
+        cv2.circle(img, (x, y), 1, [255, 255, 0], -1)
+    print("length of corners2_array (Shi Tomasi)=", len(corners2_array))
+    to_txt_file("Shi Tomasi: corners2", corners2_array)
+
+    # Harris Corner Detection (pretty bad)
+    print("img shape", img.shape)
+    corners3_vals = cv2.cornerHarris(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 2, 3, 0.04) # args are: image, blockSize, ksize, k
+    corners3_vals = cv2.dilate(corners3_vals, None)
+    corners3_coords = []
+
+    for i in range(len(corners3_vals)):
+        for j in range(len(corners3_vals[0])):
+            if corners3_vals[i, j] > 0.1 * corners3_vals.max():
+                corners3_coords.append([i, j])
+
+    # for corner in corners3_coords:
+    #     x, y = corner
+    #     cv2.circle(img, (x, y), 1, [255, 255, 0], 0) # -1 means fill in the circle, 1 means thickness of circle
+
+    plt.imshow(img)
+    plt.suptitle("Shi Tomasi OR Harris Corners (yellow)")
+    plt.show()
 
     corners = find_chessboard_corners(img)
-    print("corners", corners)
     if corners is not None:
-        cv2.drawChessboardCorners(img, (7,7), corners, True)
-        plt.imshow(img)
+        cropped_img, adjusted_corners = helper.crop_image(img, corners)
+        # cv2.drawChessboardCorners(cropped_img, (7,7), adjusted_corners, True)
+        print("adjusted_corners", adjusted_corners)
+        for corner in adjusted_corners:
+            x, y = corner.ravel()
+            x, y = int(x), int(y)
+            cv2.circle(cropped_img, (x, y), 1, [0, 255, 0], -1)
+        plt.imshow(cropped_img)
         plt.suptitle("chessboard CORNERS")
         plt.show()
         # cv2.imshow('img', img)
@@ -131,7 +182,38 @@ for img_path in output_directory:
         # cv2.destroyAllWindows()
     else:
         print("corners not found")
-
     canny_edge_detection(img)
 
+# trying something new:import cv2 as cv
+# camera=cv2.VideoCapture(1)
 
+# while True:
+#     ret, frame_BGR_original=camera.read()
+#     frame_BGR_resized = helper.resize_image(frame_BGR_original, 100)
+#     frame_BGR_resized_2 = frame_BGR_resized
+
+#     frame_GRAY = cv2.cvtColor(frame_BGR_resized, cv2.COLOR_BGR2GRAY)
+#     frame_GRAY_blured=cv2.GaussianBlur(frame_GRAY,(5,5),0)
+
+#     gray_corners = cv2.goodFeaturesToTrack(frame_GRAY, 100, 0.4, 5)
+#     corners_array = np.int0(gray_corners)
+
+
+#     #Display the corners found in the image
+#     for i in corners_array:
+#         x, y = i.ravel()
+#         cv2.circle(frame_BGR_resized_2, (x, y), 3, [255, 255, 0], -1)
+
+#     #frame_GRAY_cropped = my_functions.crop_image(frame_GRAY, corners_array)
+#     frame_BGR_cropped= helper.crop_image(frame_BGR_resized,corners_array)
+
+
+#     helper.open_in_location(frame_BGR_resized_2, "Shi Tomasi Corners", 00, 10)
+#     helper.open_in_location(frame_BGR_cropped, "Original Frame Cropped", 800, 10)
+
+#     key=cv2.waitKey(1) & 0xff
+#     if key == ord('q'):
+#         break
+
+# camera.release()
+# cv2.destroyAllWindows()
