@@ -123,7 +123,7 @@ def canny_edge_detection(img):
         print("chessboard contours not found")
 
 def to_txt_file(name, array):
-    with open("corners.txt", "w") as f:
+    with open(name + ".txt", "w") as f:
         f.write(name + "\n")
         f.write(str(array))
 
@@ -144,7 +144,9 @@ for img_path in output_directory:
         x, y = corner.ravel()
         cv2.circle(img, (x, y), 1, [255, 255, 0], -1)
     print("length of corners2_array (Shi Tomasi)=", len(corners2_array))
-    to_txt_file("Shi Tomasi: corners2", corners2_array)
+    sorted_shi_tomasi_corners = helper.shi_tomasi_corners_to_chess_cells(corners2_array)
+    to_txt_file("Shi_Tomasi_corners2", sorted_shi_tomasi_corners)
+    helper.transform(img, sorted_shi_tomasi_corners)
 
     # Harris Corner Detection (pretty bad)
     print("img shape", img.shape)
@@ -167,9 +169,9 @@ for img_path in output_directory:
 
     corners = find_chessboard_corners(img)
     if corners is not None:
+        to_txt_file("find_chess_board() corners ", corners)
         cropped_img, adjusted_corners = helper.crop_image(img, corners)
         # cv2.drawChessboardCorners(cropped_img, (7,7), adjusted_corners, True)
-        print("adjusted_corners", adjusted_corners)
         for corner in adjusted_corners:
             x, y = corner.ravel()
             x, y = int(x), int(y)
