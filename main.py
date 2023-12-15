@@ -145,11 +145,11 @@ for img_path in output_directory:
     corners2_array = np.array(corners2).astype(np.int32)
     for corner in corners2_array:
         x, y = corner.ravel()
-        cv2.circle(img, (x, y), 1, [255, 255, 0], -1)
+        # cv2.circle(img, (x, y), 1, [255, 255, 0], -1)
     print("length of corners2_array (Shi Tomasi)=", len(corners2_array))
     sorted_shi_tomasi_corners = helper.shi_tomasi_corners_to_chess_cells(corners2_array)
     to_txt_file("Shi_Tomasi_corners2", sorted_shi_tomasi_corners)
-    helper.transform(img, sorted_shi_tomasi_corners)
+    # helper.transform(img, sorted_shi_tomasi_corners)
 
     # Harris Corner Detection (pretty bad)
     print("img shape", img.shape)
@@ -162,12 +162,12 @@ for img_path in output_directory:
             if corners3_vals[i, j] > 0.1 * corners3_vals.max():
                 corners3_coords.append([i, j])
 
-    # for corner in corners3_coords:
-    #     x, y = corner
-    #     cv2.circle(img, (x, y), 1, [255, 255, 0], 0) # -1 means fill in the circle, 1 means thickness of circle
+    for corner in corners3_coords:
+        x, y = corner
+        # cv2.circle(img, (x, y), 1, [255, 255, 0], 0) # -1 means fill in the circle, 1 means thickness of circle
 
     plt.imshow(img)
-    plt.suptitle("Shi Tomasi OR Harris Corners (yellow)")
+    plt.suptitle("Shi Tomasi corners(yellow)")
     plt.show()
 
     corners = find_chessboard_corners(img)
