@@ -134,6 +134,9 @@ for img_path in output_directory:
     # img_path = jpg_directory + img_path
     img = cv2.imread(img_path)
 
+    # apply Gaussian blur to reduce noise
+    # img = cv2.GaussianBlur(img, (5,5), 0)
+
     # downscale image:
     img = cv2.resize(img, (0,0), fx=0.5 ** 1, fy=0.5 ** 1)
 
