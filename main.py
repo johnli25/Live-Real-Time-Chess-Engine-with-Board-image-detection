@@ -10,6 +10,10 @@ import os
 from PIL import Image
 import pillow_heif
 import helper
+from roboflow import Roboflow
+rf = Roboflow(api_key="nNDxYmDvU1b7mbzgcwHV")
+project = rf.workspace().project("chess-13fgy")
+model = project.version(1).model
 
 engine_path = "./stockfish/stockfish-windows-x86-64-avx2.exe"
 np.set_printoptions(threshold=np.inf)
@@ -56,8 +60,8 @@ def returnNextBestMove(board_img_nparray):
 
 
 # main driver code:
-current_8x8_board = returnBoardConfigurationFromImage("test.png")
-print(returnNextBestMove(current_8x8_board))
+# current_8x8_board = returnBoardConfigurationFromImage("test.png")
+# print(returnNextBestMove(current_8x8_board))
 
 heic_directory = "./chess-images-training-dataset-heic/"
 jpg_directory = './chess-images-training-dataset-jpg/'
@@ -129,7 +133,8 @@ def to_txt_file(name, array):
 
 output_directory = [jpg_directory + "IMG_5090.jpg"] # , jpg_directory + "IMG_5091.jpg", jpg_directory + "IMG_5092.jpg"]
 # output_directory = os.listdir(jpg_directory) 
-output_directory = ['./manually_cropped_chessboard.png']
+# output_directory = ['./manually_cropped_chessboard.png']
+output_directory = ['./IMG_5096.jpg']
 for img_path in output_directory:
     # img_path = jpg_directory + img_path
     img = cv2.imread(img_path)
@@ -138,14 +143,14 @@ for img_path in output_directory:
     # img = cv2.GaussianBlur(img, (5,5), 0)
 
     # downscale image:
-    img = cv2.resize(img, (0,0), fx=0.5 ** 1, fy=0.5 ** 1)
+    img = cv2.resize(img, (0,0), fx=0.5 ** 3, fy=0.5 ** 3)
 
     # Shi Tomasi Corner Detection (pretty good)
-    corners2 = cv2.goodFeaturesToTrack(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 100, 0.1, 10) # args are: image, maxCorners, qualityLevel, minDistance
+    corners2 = cv2.goodFeaturesToTrack(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 81, 0.1, 10) # args are: image, maxCorners, qualityLevel, minDistance
     corners2_array = np.array(corners2).astype(np.int32)
     for corner in corners2_array:
         x, y = corner.ravel()
-        # cv2.circle(img, (x, y), 1, [255, 255, 0], -1)
+        cv2.circle(img, (x, y), 1, [255, 255, 0], -1)
     print("length of corners2_array (Shi Tomasi)=", len(corners2_array))
     sorted_shi_tomasi_corners = helper.shi_tomasi_corners_to_chess_cells(corners2_array)
     to_txt_file("Shi_Tomasi_corners2", sorted_shi_tomasi_corners)
@@ -189,6 +194,60 @@ for img_path in output_directory:
         print("corners not found")
     canny_edge_detection(img)
 
+# print("final real corners:", sorted_shi_tomasi_corners)
+def group_into_squares(points):
+    squares = {}
+    for row in range(8):
+        for col in range(8):
+            # Each square is a set of four points
+            top_left = tuple(points[row * 9 + col])
+            top_right = tuple(points[row * 9 + col + 1])
+            bottom_left = tuple(points[(row + 1) * 9 + col])
+            bottom_right = tuple(points[(row + 1) * 9 + col + 1])
+            # squares[(row, col)] = [top_left, top_right, bottom_left, bottom_right]
+            squares[(top_left, top_right, bottom_left, bottom_right)] = (row, col)
+    return squares
+
+def chess_piece_string_to_char(piece):
+    mapping = {
+        'black_pawn': 'p',
+        'black_rook': 'r',
+        'black_knight': 'n',
+        'black_bishop': 'b',
+        'black_queen': 'q',
+        'black_king': 'k',
+        'white_pawn': 'P',
+        'white_rook': 'R',
+        'white_knight': 'N',
+        'white_bishop': 'B',
+        'white_queen': 'Q',
+        'white_king': 'K',
+    }
+    return mapping.get(piece, None)  # Returns None if the piece is not found
+
+
+corners_to_cell_indices_map = group_into_squares(sorted_shi_tomasi_corners)
+print("corners_to_cell_indices_map", corners_to_cell_indices_map.keys())
+board_with_pieces_img = cv2.imread("./IMG_5099.jpg")
+board_with_pieces_img = cv2.resize(board_with_pieces_img, (0,0), fx=0.5 ** 3, fy=0.5 ** 3)
+print("board_with_pieces_img.shape", board_with_pieces_img.shape)   
+# classification_model = model.predict("./segmented-images-and-masks/PNGImages/IMG_5291.jpg", confidence=5, overlap=30).json()
+classification_model = model.predict(board_with_pieces_img, confidence=5, overlap=30).json()
+
+current_8x8_board = np.zeros((8, 8))
+print("start 8x8 board", current_8x8_board)
+for prediction in classification_model['predictions']:
+    x, y = prediction['x'], prediction['y']
+    print("x, y", x, y)
+    cv2.circle(img, (int(x), int(y)), 1, [0, 255, 0], -1)
+    for k, v in corners_to_cell_indices_map.items():
+        if x > k[0][0] and x < k[1][0] and y > k[0][1] and y < k[2][1]:
+            print("found piece", prediction['class'], "at", v)
+            current_8x8_board[v[0], v[1]] = chess_piece_string_to_char(prediction['class'])
+            break
+print("final 8x8 board", current_8x8_board)
+plt.imshow(img)
+plt.show()
 # trying something new:import cv2 as cv
 # camera=cv2.VideoCapture(1)
 
